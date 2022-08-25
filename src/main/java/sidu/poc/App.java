@@ -37,8 +37,14 @@ public class App
                 case "scan":
                     app.scanTable();
                     break;
+                case "update":
+                    app.updateTable();
+                    break;
                 case "drop":
                     app.dropTable();
+                    break;
+                case "append":
+                    app.append();
                     break;
                 default:
                     LOG.info("Unknown command '{}'", arg);
@@ -122,8 +128,27 @@ public class App
     public void updateTable() {
         Table table = catalog.loadTable(tableIdentifier);
 
-        table.updateSchema()
-                .addColumn("count", Types.LongType.get())
-                .commit();
+        LOG.info("Update schema - add column");
+        table.updateSchema().addColumn("count", Types.LongType.get()).commit();
+        LOG.info("Schema: {}", table.schema());
+
+        LOG.info("Update schema - remove column");
+        table.updateSchema().deleteColumn("count").commit();
+        LOG.info("Schema: {}", table.schema());
+    }
+
+    public void append() {
+        Table table = catalog.loadTable(tableIdentifier);
+        PartitionSpec spec = table.spec();
+
+        DataFile dataFile = DataFiles.builder(spec)
+                .withPath("/home/iceberg/warehouse/nyc/logs/data/new.parquet")
+                .withFileSizeInBytes(2048)
+                //.withPartitionPath("data_bucket=0") // easy way to set partition data for now
+                .withRecordCount(1)
+                .build();
+
+        LOG.info("Append data file");
+        table.newAppend().appendFile(dataFile).commit();
     }
 }

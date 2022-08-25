@@ -37,7 +37,7 @@ public class App
                 case "scan":
                     app.scanTable();
                     break;
-                case "update":
+                case "updateTable":
                     app.updateTable();
                     break;
                 case "drop":
@@ -45,6 +45,9 @@ public class App
                     break;
                 case "append":
                     app.append();
+                    break;
+                case "delete":
+                    app.delete();
                     break;
                 default:
                     LOG.info("Unknown command '{}'", arg);
@@ -144,11 +147,17 @@ public class App
         DataFile dataFile = DataFiles.builder(spec)
                 .withPath("/home/iceberg/warehouse/nyc/logs/data/new.parquet")
                 .withFileSizeInBytes(2048)
-                //.withPartitionPath("data_bucket=0") // easy way to set partition data for now
+                .withPartitionPath("event_time_hour=12/level=warning") // easy way to set partition data for now
                 .withRecordCount(1)
                 .build();
 
         LOG.info("Append data file");
         table.newAppend().appendFile(dataFile).commit();
+    }
+
+    public void delete() {
+        Table table = catalog.loadTable(tableIdentifier);
+        LOG.info("Append data file");
+        table.newDelete().deleteFile("/home/iceberg/warehouse/nyc/logs/data/new.parquet").commit();
     }
 }

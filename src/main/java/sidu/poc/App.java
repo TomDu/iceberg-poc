@@ -10,6 +10,7 @@ import org.apache.iceberg.expressions.Expressions;
 import org.apache.iceberg.io.CloseableIterable;
 import org.apache.iceberg.jdbc.JdbcCatalog;
 import org.apache.iceberg.hadoop.HadoopFileIO;
+import org.apache.iceberg.types.Types;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -25,11 +26,31 @@ public class App
     public static void main( String[] args )
     {
         LOG.info( "--- START ---" );
-        new App().run();
+        App app = new App();
+
+        for (String arg : args) {
+            LOG.info("--- {} ---", arg);
+            switch (arg) {
+                case "create":
+                    app.createTable();
+                    break;
+                case "scan":
+                    app.scanTable();
+                    break;
+                case "drop":
+                    app.dropTable();
+                    break;
+                default:
+                    LOG.info("Unknown command '{}'", arg);
+                    break;
+            }
+        }
+
         LOG.info( "--- END ---" );
     }
 
     private final JdbcCatalog catalog;
+    private final TableIdentifier tableIdentifier;
 
     public App() {
         Map<String, String> properties = new HashMap<>();
@@ -46,14 +67,36 @@ public class App
         catalog = new JdbcCatalog();
         catalog.setConf(conf);
         catalog.initialize("demo", properties);
-    }
-
-    public void run() {
         LOG.info("Catalog name: {}", catalog.name());
 
         Namespace nyc = Namespace.of("nyc");
-        TableIdentifier name = TableIdentifier.of(nyc, "logs");
-        Table table = catalog.loadTable(name);
+        tableIdentifier = TableIdentifier.of(nyc, "logs");
+    }
+
+    public void createTable() {
+        Schema schema = new Schema(
+                Types.NestedField.required(1, "level", Types.StringType.get()),
+                Types.NestedField.required(2, "event_time", Types.TimestampType.withZone()),
+                Types.NestedField.required(3, "message", Types.StringType.get()),
+                Types.NestedField.optional(4, "call_stack", Types.ListType.ofRequired(5, Types.StringType.get()))
+        );
+        LOG.info("Schema: {}", schema);
+
+        PartitionSpec spec = PartitionSpec.builderFor(schema)
+                .hour("event_time")
+                .identity("level")
+                .build();
+        LOG.info("PartitionSpec: {}", spec);
+
+        catalog.createTable(tableIdentifier, schema, spec);
+    }
+
+    public void dropTable() {
+        catalog.dropTable(tableIdentifier);
+    }
+
+    public void scanTable() {
+        Table table = catalog.loadTable(tableIdentifier);
 
         LOG.info("Scan all records:");
         CloseableIterable<Record> result = IcebergGenerics.read(table).build();
@@ -74,5 +117,13 @@ public class App
         CombinedScanTask task = result2.iterator().next();
         DataFile dataFile = task.files().iterator().next().file();
         LOG.info(dataFile.toString());
+    }
+
+    public void updateTable() {
+        Table table = catalog.loadTable(tableIdentifier);
+
+        table.updateSchema()
+                .addColumn("count", Types.LongType.get())
+                .commit();
     }
 }

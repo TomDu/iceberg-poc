@@ -29,6 +29,7 @@ public class App
         App app = new App();
 
         for (String arg : args) {
+            System.out.println();
             LOG.info("--- {} ---", arg);
             switch (arg) {
                 case "create":
@@ -48,6 +49,15 @@ public class App
                     break;
                 case "delete":
                     app.delete();
+                    break;
+                case "addRows":
+                    app.rowDeltaAddRows();
+                    break;
+                case "addDeletes":
+                    app.rowDeltaAddDeletes();
+                    break;
+                case "updateTableProperties":
+                    app.updateTableProperties();
                     break;
                 default:
                     LOG.info("Unknown command '{}'", arg);
@@ -97,7 +107,11 @@ public class App
                 .build();
         LOG.info("PartitionSpec: {}", spec);
 
-        catalog.createTable(tableIdentifier, schema, spec);
+        Map<String, String> properties = new HashMap<>();
+        // SUPPORTED_TABLE_FORMAT_VERSION = 2, in which rowDelta.addDeletes is supported.
+        properties.put(TableProperties.FORMAT_VERSION, "2");
+
+        catalog.createTable(tableIdentifier, schema, spec, properties);
     }
 
     public void dropTable() {
@@ -145,7 +159,7 @@ public class App
         PartitionSpec spec = table.spec();
 
         DataFile dataFile = DataFiles.builder(spec)
-                .withPath("/home/iceberg/warehouse/nyc/logs/data/new.parquet")
+                .withPath("/home/iceberg/warehouse/dev/new.parquet")
                 .withFileSizeInBytes(2048)
                 .withPartitionPath("event_time_hour=12/level=warning") // easy way to set partition data for now
                 .withRecordCount(1)
@@ -158,6 +172,44 @@ public class App
     public void delete() {
         Table table = catalog.loadTable(tableIdentifier);
         LOG.info("Append data file");
-        table.newDelete().deleteFile("/home/iceberg/warehouse/nyc/logs/data/new.parquet").commit();
+        table.newDelete().deleteFile("/home/iceberg/warehouse/dev/new.parquet").commit();
+    }
+
+    public void rowDeltaAddRows() {
+        Table table = catalog.loadTable(tableIdentifier);
+        PartitionSpec spec = table.spec();
+
+        DataFile dataFile = DataFiles.builder(spec)
+                .withPath("/home/iceberg/warehouse/dev/new.parquet")
+                .withFileSizeInBytes(2048)
+                .withPartitionPath("event_time_hour=12/level=warning") // easy way to set partition data for now
+                .withRecordCount(1)
+                .build();
+
+        LOG.info("Row delta");
+        table.newRowDelta().addRows(dataFile).commit();
+    }
+
+    public void rowDeltaAddDeletes() {
+        Table table = catalog.loadTable(tableIdentifier);
+        PartitionSpec spec = table.spec();
+
+        DeleteFile deleteFile = FileMetadata.deleteFileBuilder(spec)
+                .ofPositionDeletes()
+                .withPath("/home/iceberg/warehouse/dev/new.parquet")
+                .withFileSizeInBytes(2048)
+                .withPartitionPath("event_time_hour=12/level=warning") // easy way to set partition data for now
+                .withRecordCount(1)
+                .build();
+
+        LOG.info("Row delta");
+        table.newRowDelta().addDeletes(deleteFile).commit();
+    }
+
+    public void updateTableProperties() {
+        Table table = catalog.loadTable(tableIdentifier);
+
+        LOG.info("Update table format-version");
+        table.updateProperties().set(TableProperties.FORMAT_VERSION, "2").commit();
     }
 }

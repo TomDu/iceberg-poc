@@ -1,7 +1,5 @@
 package sidu.poc;
 
-import static org.junit.Assert.assertTrue;
-
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
 import org.apache.avro.generic.GenericRecord;
@@ -11,7 +9,6 @@ import org.junit.Test;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 
 /**
  * Unit test for simple App.
@@ -93,5 +90,4 @@ public class AppTest
 
         SimpleParquetWriter.write(schema, fileName, records);
     }
-
 }

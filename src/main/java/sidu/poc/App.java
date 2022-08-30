@@ -53,8 +53,11 @@ public class App
                 case "addRows":
                     app.rowDeltaAddRows();
                     break;
-                case "addDeletes":
-                    app.rowDeltaAddDeletes();
+                case "deleteByPosition":
+                    app.deleteByPosition();
+                    break;
+                case "deleteByEquality":
+                    app.deleteByEquality();
                     break;
                 case "updateTableProperties":
                     app.updateTableProperties();
@@ -88,27 +91,23 @@ public class App
         catalog.initialize("demo", properties);
         LOG.info("Catalog name: {}", catalog.name());
 
-        Namespace nyc = Namespace.of("nyc");
-        tableIdentifier = TableIdentifier.of(nyc, "logs");
+        Namespace nyc = Namespace.of("main");
+        tableIdentifier = TableIdentifier.of(nyc, "contacts");
     }
 
     public void createTable() {
         Schema schema = new Schema(
-                Types.NestedField.required(1, "level", Types.StringType.get()),
-                Types.NestedField.required(2, "event_time", Types.TimestampType.withZone()),
-                Types.NestedField.required(3, "message", Types.StringType.get()),
-                Types.NestedField.optional(4, "call_stack", Types.ListType.ofRequired(5, Types.StringType.get()))
-        );
+                Types.NestedField.required(1, "class", Types.StringType.get()),
+                Types.NestedField.required(2, "id", Types.IntegerType.get()),
+                Types.NestedField.required(3, "name", Types.StringType.get()));
         LOG.info("Schema: {}", schema);
 
         PartitionSpec spec = PartitionSpec.builderFor(schema)
-                .hour("event_time")
-                .identity("level")
+                .identity("class")
                 .build();
         LOG.info("PartitionSpec: {}", spec);
 
         Map<String, String> properties = new HashMap<>();
-        // SUPPORTED_TABLE_FORMAT_VERSION = 2, in which rowDelta.addDeletes is supported.
         properties.put(TableProperties.FORMAT_VERSION, "2");
 
         catalog.createTable(tableIdentifier, schema, spec, properties);
@@ -127,15 +126,15 @@ public class App
             LOG.info(r.toString());
         }
 
-        LOG.info("Scan all records where level == error:");
-        result = IcebergGenerics.read(table).where(Expressions.equal("level", "error")).build();
+        LOG.info("Scan all records where class == A:");
+        result = IcebergGenerics.read(table).where(Expressions.equal("class", "A")).build();
         for (Record r: result) {
             LOG.info(r.toString());
         }
 
-        LOG.info("TableScan with level == info:");
+        LOG.info("TableScan with class == A:");
         TableScan scan = table.newScan();
-        TableScan filteredScan = scan.filter(Expressions.equal("level", "info")).select("message");
+        TableScan filteredScan = scan.filter(Expressions.equal("class", "A")).select("name");
         Iterable<CombinedScanTask> result2 = filteredScan.planTasks();
         CombinedScanTask task = result2.iterator().next();
         DataFile dataFile = task.files().iterator().next().file();
@@ -159,9 +158,9 @@ public class App
         PartitionSpec spec = table.spec();
 
         DataFile dataFile = DataFiles.builder(spec)
-                .withPath("/home/iceberg/warehouse/dev/new.parquet")
+                .withPath("/home/iceberg/warehouse/dev/iceberg-poc/sample-data.parquet")
                 .withFileSizeInBytes(2048)
-                .withPartitionPath("event_time_hour=12/level=warning") // easy way to set partition data for now
+                .withPartitionPath("class=A") // easy way to set partition data for now
                 .withRecordCount(1)
                 .build();
 
@@ -171,8 +170,8 @@ public class App
 
     public void delete() {
         Table table = catalog.loadTable(tableIdentifier);
-        LOG.info("Append data file");
-        table.newDelete().deleteFile("/home/iceberg/warehouse/dev/new.parquet").commit();
+        LOG.info("Delete data file");
+        table.newDelete().deleteFile("/home/iceberg/warehouse/dev/iceberg-poc/sample-data.parquet").commit();
     }
 
     public void rowDeltaAddRows() {
@@ -180,9 +179,9 @@ public class App
         PartitionSpec spec = table.spec();
 
         DataFile dataFile = DataFiles.builder(spec)
-                .withPath("/home/iceberg/warehouse/dev/new.parquet")
+                .withPath("/home/iceberg/warehouse/dev/iceberg-poc/sample-data.parquet")
                 .withFileSizeInBytes(2048)
-                .withPartitionPath("event_time_hour=12/level=warning") // easy way to set partition data for now
+                .withPartitionPath("class=A") // easy way to set partition data for now
                 .withRecordCount(1)
                 .build();
 
@@ -190,19 +189,35 @@ public class App
         table.newRowDelta().addRows(dataFile).commit();
     }
 
-    public void rowDeltaAddDeletes() {
+    public void deleteByPosition() {
         Table table = catalog.loadTable(tableIdentifier);
         PartitionSpec spec = table.spec();
 
         DeleteFile deleteFile = FileMetadata.deleteFileBuilder(spec)
                 .ofPositionDeletes()
-                .withPath("/home/iceberg/warehouse/dev/new.parquet")
+                .withPath("/home/iceberg/warehouse/dev/iceberg-poc/sample-position-delete-file.parquet")
                 .withFileSizeInBytes(2048)
-                .withPartitionPath("event_time_hour=12/level=warning") // easy way to set partition data for now
+                .withPartitionPath("class=A") // easy way to set partition data for now
                 .withRecordCount(1)
                 .build();
 
-        LOG.info("Row delta");
+        LOG.info("Row delta - deleteByPosition");
+        table.newRowDelta().addDeletes(deleteFile).commit();
+    }
+
+    public void deleteByEquality() {
+        Table table = catalog.loadTable(tableIdentifier);
+        PartitionSpec spec = table.spec();
+
+        DeleteFile deleteFile = FileMetadata.deleteFileBuilder(spec)
+                .ofEqualityDeletes(1, 2)
+                .withPath("/home/iceberg/warehouse/dev/iceberg-poc/sample-equality-delete-file.parquet")
+                .withFileSizeInBytes(2048)
+                .withPartitionPath("class=A") // easy way to set partition data for now
+                .withRecordCount(1)
+                .build();
+
+        LOG.info("Row delta - deleteByEquality");
         table.newRowDelta().addDeletes(deleteFile).commit();
     }
 

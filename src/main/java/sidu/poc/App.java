@@ -4,16 +4,23 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.iceberg.*;
 import org.apache.iceberg.catalog.Namespace;
 import org.apache.iceberg.catalog.TableIdentifier;
+import org.apache.iceberg.data.GenericAppenderFactory;
 import org.apache.iceberg.data.IcebergGenerics;
 import org.apache.iceberg.data.Record;
+import org.apache.iceberg.deletes.PositionDelete;
+import org.apache.iceberg.deletes.PositionDeleteWriter;
+import org.apache.iceberg.encryption.EncryptedOutputFile;
 import org.apache.iceberg.expressions.Expressions;
 import org.apache.iceberg.io.CloseableIterable;
+import org.apache.iceberg.io.DeleteSchemaUtil;
+import org.apache.iceberg.io.OutputFileFactory;
 import org.apache.iceberg.jdbc.JdbcCatalog;
 import org.apache.iceberg.hadoop.HadoopFileIO;
 import org.apache.iceberg.types.Types;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.HashMap;
@@ -39,6 +46,7 @@ public class App
         LOG.info( "--- END ---" );
     }
 
+    private final String tableName = "contacts3";
     private final JdbcCatalog catalog;
     private final TableIdentifier tableIdentifier;
 
@@ -60,7 +68,7 @@ public class App
         LOG.info("Catalog name: {}", catalog.name());
 
         Namespace nyc = Namespace.of("main");
-        tableIdentifier = TableIdentifier.of(nyc, "contacts2");
+        tableIdentifier = TableIdentifier.of(nyc, tableName);
     }
 
     public void create() {
@@ -170,6 +178,38 @@ public class App
                 .build();
 
         LOG.info("Row delta - deleteByPosition");
+        table.newRowDelta().addDeletes(deleteFile).commit();
+    }
+
+    public void deleteByPosition2() throws IOException {
+        Table table = catalog.loadTable(tableIdentifier);
+        Schema schema = table.schema();
+        PartitionSpec partitionSpec = table.spec();
+
+        Schema pathPosSchema = DeleteSchemaUtil.pathPosSchema();
+        GenericAppenderFactory genericAppenderFactory = new GenericAppenderFactory(
+                schema,
+                partitionSpec,
+                new int[] { 1 },
+                null,
+                null);
+
+        OutputFileFactory outputFileFactory =
+                OutputFileFactory.builderFor(table, 1, 1).format(FileFormat.PARQUET).build();
+        PartitionKey partitionKey = new PartitionKey(partitionSpec, schema);
+        partitionKey.set(0, "A");
+        EncryptedOutputFile outputFile = outputFileFactory.newOutputFile();
+        PositionDeleteWriter<Record> positionDeleteWriter =
+                genericAppenderFactory.newPosDeleteWriter(outputFile, FileFormat.PARQUET, partitionKey);
+
+        try (PositionDeleteWriter<Record> closeableWriter = positionDeleteWriter) {
+            closeableWriter.write(PositionDelete.<Record>create().set("/home/iceberg/warehouse/dev/iceberg-poc/sample-data.parquet", 0L, null));
+            closeableWriter.write(PositionDelete.<Record>create().set("/home/iceberg/warehouse/dev/iceberg-poc/sample-data.parquet", 1L, null));
+            closeableWriter.write(PositionDelete.<Record>create().set("/home/iceberg/warehouse/dev/iceberg-poc/sample-data.parquet", 2L, null));
+        }
+
+        DeleteFile deleteFile = positionDeleteWriter.toDeleteFile();
+        LOG.info("Row delta - deleteByPosition2");
         table.newRowDelta().addDeletes(deleteFile).commit();
     }
 

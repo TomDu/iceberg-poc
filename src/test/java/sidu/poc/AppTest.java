@@ -21,19 +21,19 @@ public class AppTest
                 .builder()
                 .record("table")
                 .fields()
-                .requiredString("class")
-                .requiredInt("id")
-                .requiredString("name")
+                .requiredString("contact_class")
+                .requiredInt("contact_id")
+                .requiredString("contact_name")
                 .endRecord();
 
         String fileName = "sample-data.parquet";
 
         List<GenericRecord> records = new ArrayList<>();
-        for (int i = 0; i < 3; ++i) {
+        for (int i = 0; i < 100; ++i) {
             GenericRecord record = new GenericRecordBuilder(schema)
-                    .set("class", "A")
-                    .set("id", i)
-                    .set("name", "Foo" + i)
+                    .set("contact_class", "A")
+                    .set("contact_id", i)
+                    .set("contact_name", "Foo" + i)
                     .build();
             records.add(record);
         }
@@ -43,26 +43,42 @@ public class AppTest
 
     @Test
     public void testWriteDeleteFileOfPositionDeletes() throws IOException {
+        Schema rowSchema = SchemaBuilder
+                .builder()
+                .record("row")
+                .fields()
+                .requiredString("contact_class")
+                .requiredInt("contact_id")
+                .requiredString("contact_name")
+                .endRecord();
+
         Schema schema = SchemaBuilder
                 .builder()
                 .record("table")
                 .fields()
-                .requiredString("class")
                 .requiredString("file_path")
                 .requiredLong("pos")
+                .name("row")
+                    .type(rowSchema)
+                    .noDefault()
                 .endRecord();
 
         String fileName = "sample-position-delete-file.parquet";
 
+        GenericRecord rowRecord = new GenericRecordBuilder(rowSchema)
+                .set("contact_class", "A")
+                .set("contact_id", 8)
+                .set("contact_name", "Foo" + 8)
+                .build();
+
+        GenericRecord record = new GenericRecordBuilder(schema)
+                .set("file_path", "/home/iceberg/warehouse/dev/iceberg-poc/sample-data.parquet")
+                .set("pos", 8L)
+                .set("row", rowRecord)
+                .build();
+
         List<GenericRecord> records = new ArrayList<>();
-        for (int i = 0; i < 1; ++i) {
-            GenericRecord record = new GenericRecordBuilder(schema)
-                    .set("class", "A")
-                    .set("file_path", "/home/iceberg/warehouse/dev/iceberg-poc/sample-data.parquet")
-                    .set("pos", 0L)
-                    .build();
-            records.add(record);
-        }
+        records.add(record);
 
         SimpleParquetWriter.write(schema, fileName, records);
     }
@@ -73,17 +89,17 @@ public class AppTest
                 .builder()
                 .record("table")
                 .fields()
-                .requiredString("class")
-                .requiredInt("id")
+                .requiredString("contact_class")
+                .requiredInt("contact_id")
                 .endRecord();
 
         String fileName = "sample-equality-delete-file.parquet";
 
         List<GenericRecord> records = new ArrayList<>();
-        for (int i = 0; i < 1; ++i) {
+        for (int i = 3; i <= 5; ++i) {
             GenericRecord record = new GenericRecordBuilder(schema)
-                    .set("class", "A")
-                    .set("id", 0)
+                    .set("contact_class", "A")
+                    .set("contact_id", i)
                     .build();
             records.add(record);
         }

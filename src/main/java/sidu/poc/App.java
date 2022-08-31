@@ -14,6 +14,8 @@ import org.apache.iceberg.types.Types;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
@@ -23,49 +25,15 @@ public class App
     private static final Logger LOG = LoggerFactory.getLogger(App.class);
     private static final Properties CONFIG = Settings.getConfig();
 
-    public static void main( String[] args )
-    {
+    public static void main( String[] args ) throws NoSuchMethodException, InvocationTargetException, IllegalAccessException {
         LOG.info( "--- START ---" );
         App app = new App();
 
         for (String arg : args) {
             System.out.println();
             LOG.info("--- {} ---", arg);
-            switch (arg) {
-                case "create":
-                    app.createTable();
-                    break;
-                case "scan":
-                    app.scanTable();
-                    break;
-                case "updateTable":
-                    app.updateTable();
-                    break;
-                case "drop":
-                    app.dropTable();
-                    break;
-                case "append":
-                    app.append();
-                    break;
-                case "delete":
-                    app.delete();
-                    break;
-                case "addRows":
-                    app.rowDeltaAddRows();
-                    break;
-                case "deleteByPosition":
-                    app.deleteByPosition();
-                    break;
-                case "deleteByEquality":
-                    app.deleteByEquality();
-                    break;
-                case "updateTableProperties":
-                    app.updateTableProperties();
-                    break;
-                default:
-                    LOG.info("Unknown command '{}'", arg);
-                    break;
-            }
+            Method method = App.class.getMethod(arg);
+            method.invoke(app);
         }
 
         LOG.info( "--- END ---" );
@@ -92,18 +60,18 @@ public class App
         LOG.info("Catalog name: {}", catalog.name());
 
         Namespace nyc = Namespace.of("main");
-        tableIdentifier = TableIdentifier.of(nyc, "contacts");
+        tableIdentifier = TableIdentifier.of(nyc, "contacts2");
     }
 
-    public void createTable() {
+    public void create() {
         Schema schema = new Schema(
-                Types.NestedField.required(1, "class", Types.StringType.get()),
-                Types.NestedField.required(2, "id", Types.IntegerType.get()),
-                Types.NestedField.required(3, "name", Types.StringType.get()));
+                Types.NestedField.required(1, "contact_class", Types.StringType.get()),
+                Types.NestedField.required(2, "contact_id", Types.IntegerType.get()),
+                Types.NestedField.required(3, "contact_name", Types.StringType.get()));
         LOG.info("Schema: {}", schema);
 
         PartitionSpec spec = PartitionSpec.builderFor(schema)
-                .identity("class")
+                .identity("contact_class")
                 .build();
         LOG.info("PartitionSpec: {}", spec);
 
@@ -113,11 +81,11 @@ public class App
         catalog.createTable(tableIdentifier, schema, spec, properties);
     }
 
-    public void dropTable() {
+    public void drop() {
         catalog.dropTable(tableIdentifier);
     }
 
-    public void scanTable() {
+    public void scan() {
         Table table = catalog.loadTable(tableIdentifier);
 
         LOG.info("Scan all records:");
@@ -126,22 +94,22 @@ public class App
             LOG.info(r.toString());
         }
 
-        LOG.info("Scan all records where class == A:");
-        result = IcebergGenerics.read(table).where(Expressions.equal("class", "A")).build();
+        LOG.info("Scan all records where contact_class == A:");
+        result = IcebergGenerics.read(table).where(Expressions.equal("contact_class", "A")).build();
         for (Record r: result) {
             LOG.info(r.toString());
         }
 
-        LOG.info("TableScan with class == A:");
+        LOG.info("TableScan with contact_class == A:");
         TableScan scan = table.newScan();
-        TableScan filteredScan = scan.filter(Expressions.equal("class", "A")).select("name");
+        TableScan filteredScan = scan.filter(Expressions.equal("contact_class", "A")).select("name");
         Iterable<CombinedScanTask> result2 = filteredScan.planTasks();
         CombinedScanTask task = result2.iterator().next();
         DataFile dataFile = task.files().iterator().next().file();
         LOG.info(dataFile.toString());
     }
 
-    public void updateTable() {
+    public void updateSchema() {
         Table table = catalog.loadTable(tableIdentifier);
 
         LOG.info("Update schema - add column");
@@ -160,7 +128,7 @@ public class App
         DataFile dataFile = DataFiles.builder(spec)
                 .withPath("/home/iceberg/warehouse/dev/iceberg-poc/sample-data.parquet")
                 .withFileSizeInBytes(2048)
-                .withPartitionPath("class=A") // easy way to set partition data for now
+                .withPartitionPath("contact_class=A") // easy way to set partition data for now
                 .withRecordCount(1)
                 .build();
 
@@ -181,7 +149,7 @@ public class App
         DataFile dataFile = DataFiles.builder(spec)
                 .withPath("/home/iceberg/warehouse/dev/iceberg-poc/sample-data.parquet")
                 .withFileSizeInBytes(2048)
-                .withPartitionPath("class=A") // easy way to set partition data for now
+                .withPartitionPath("contact_class=A") // easy way to set partition data for now
                 .withRecordCount(1)
                 .build();
 
@@ -197,7 +165,7 @@ public class App
                 .ofPositionDeletes()
                 .withPath("/home/iceberg/warehouse/dev/iceberg-poc/sample-position-delete-file.parquet")
                 .withFileSizeInBytes(2048)
-                .withPartitionPath("class=A") // easy way to set partition data for now
+                .withPartitionPath("contact_class=A") // easy way to set partition data for now
                 .withRecordCount(1)
                 .build();
 
@@ -213,12 +181,17 @@ public class App
                 .ofEqualityDeletes(1, 2)
                 .withPath("/home/iceberg/warehouse/dev/iceberg-poc/sample-equality-delete-file.parquet")
                 .withFileSizeInBytes(2048)
-                .withPartitionPath("class=A") // easy way to set partition data for now
-                .withRecordCount(1)
+                .withPartitionPath("contact_class=A") // easy way to set partition data for now
+                .withRecordCount(3)
                 .build();
 
         LOG.info("Row delta - deleteByEquality");
         table.newRowDelta().addDeletes(deleteFile).commit();
+    }
+
+    public void showSchema() {
+        Table table = catalog.loadTable(tableIdentifier);
+        LOG.info("Schema: {}", table.schema());
     }
 
     public void updateTableProperties() {

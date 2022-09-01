@@ -230,7 +230,7 @@ public class App
 
         try (PositionDeleteWriter<Record> closeableWriter = positionDeleteWriter) {
             closeableWriter.write(PositionDelete.<Record>create().set("/home/iceberg/warehouse/dev/iceberg-poc/sample-data.parquet", 0L, null));
-            closeableWriter.write(PositionDelete.<Record>create().set("/home/iceberg/warehouse/dev/iceberg-poc/sample-data.parquet", 1L, null));
+            closeableWriter.write(PositionDelete.<Record>create().set("/home/iceberg/warehouse/dev/iceberg-poc/sample-data.parquet", 10000L, null));
             closeableWriter.write(PositionDelete.<Record>create().set("/home/iceberg/warehouse/dev/iceberg-poc/sample-data.parquet", 2L, null));
         }
 
@@ -293,7 +293,14 @@ public class App
     public void updateTableProperties() {
         Table table = catalog.loadTable(tableIdentifier);
 
-        LOG.info("Update table format-version");
-        table.updateProperties().set(TableProperties.FORMAT_VERSION, "2").commit();
+        // table.updateProperties().set(TableProperties.FORMAT_VERSION, "2").commit();
+        table.updateProperties().set(TableProperties.METADATA_DELETE_AFTER_COMMIT_ENABLED, "true").commit();
+        table.updateProperties().set(TableProperties.METADATA_PREVIOUS_VERSIONS_MAX, "32").commit();
+    }
+
+    public void expireSnapshots () {
+        Table table = catalog.loadTable(tableIdentifier);
+        long tsToExpire = System.currentTimeMillis() - (1000 * 60 * 60);
+        table.expireSnapshots().expireOlderThan(tsToExpire).commit();
     }
 }

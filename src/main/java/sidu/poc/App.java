@@ -46,7 +46,7 @@ public class App
         LOG.info( "--- END ---" );
     }
 
-    private final String tableName = "contacts3";
+    private final String tableName = "contacts5";
     private final JdbcCatalog catalog;
     private final TableIdentifier tableIdentifier;
 
@@ -186,13 +186,8 @@ public class App
         Schema schema = table.schema();
         PartitionSpec partitionSpec = table.spec();
 
-        Schema pathPosSchema = DeleteSchemaUtil.pathPosSchema();
-        GenericAppenderFactory genericAppenderFactory = new GenericAppenderFactory(
-                schema,
-                partitionSpec,
-                new int[] { 1 },
-                null,
-                null);
+        // Schema pathPosSchema = DeleteSchemaUtil.pathPosSchema();
+        GenericAppenderFactory genericAppenderFactory = new GenericAppenderFactory(schema, partitionSpec);
 
         OutputFileFactory outputFileFactory =
                 OutputFileFactory.builderFor(table, 1, 1).format(FileFormat.PARQUET).build();

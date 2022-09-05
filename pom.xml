@@ -95,7 +95,8 @@
           <groupId>log4j</groupId>
           <artifactId>log4j</artifactId>
         </exclusion>
-      </exclusions>    </dependency>
+      </exclusions>
+    </dependency>
     <!-- https://mvnrepository.com/artifact/org.apache.hadoop/hadoop-mapreduce-client-core -->
     <dependency>
       <groupId>org.apache.hadoop</groupId>
